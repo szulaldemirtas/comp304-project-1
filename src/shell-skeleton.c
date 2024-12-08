@@ -402,6 +402,7 @@ int process_command(struct command_t *command) {
 	}
 
 	pid_t pid = fork();
+
 	// child
 	if (pid == 0) {
 		/// This shows how to do exec with environ (but is not available on MacOs)
@@ -415,8 +416,57 @@ int process_command(struct command_t *command) {
 		// TODO: do your own exec with path resolving using execv()
 		// do so by replacing the execvp call below
 		
-		int path_length = 1024;
+		// I/O Redirection: <, >, >>
+		// Checking if commmand redirects
 
+		if (command -> redirects[0]) {
+			FILE *input_file = fopen(command -> redirects[0], "r");
+			if (!input_file) {
+				perror("Error: Input file is not opened");
+	            exit(EXIT_FAILURE);
+			}
+
+			if (dup2(fileno(input_file), STDIN_FILENO) < 0) {
+				perror("Error: Redirection failed");
+				fclose(input_file);
+	            exit(EXIT_FAILURE);
+			}
+			
+			fclose(input_file);
+		}
+
+		if (command -> redirects[1]) {
+			FILE *output_file = fopen(command -> redirects[1], "w");
+			if (!output_file) {
+				perror("Error: Output file is not opened");
+           		exit(EXIT_FAILURE);
+			}
+
+			if (dup2(fileno(output_file), STDOUT_FILENO) < 0) {
+				perror("Error: Redirection failed");
+	            exit(EXIT_FAILURE);
+			}
+			
+			fclose(output_file);
+			
+		}
+
+		if (command -> redirects[2]) {
+			FILE *append_file = fopen(command -> redirects[2], "a");
+			if (!append_file) {
+				perror("Error: Append file is not opened");
+           		exit(EXIT_FAILURE);
+			}
+
+			if (dup2(fileno(append_file), STDOUT_FILENO) < 0) {
+				perror("Error: Redirection failed");
+           	    exit(EXIT_FAILURE);
+			}
+
+			fclose(append_file);			
+		}
+
+		int path_length = 1024;
 		char *path = getenv("PATH");
 	    char *path_copy = strdup(path);
 		char *token = strtok(path_copy, ":");
@@ -425,10 +475,9 @@ int process_command(struct command_t *command) {
 		while (token != NULL) {
 			strcpy(command_path, token);
 			char *command_name = command->name;
-			
 			snprintf(command_path, sizeof(command_path), "%s/%s", token, command_name);
             execv(command_path, command->args);
- 
+
             token = strtok(NULL, ":");
 		}
 
@@ -449,8 +498,6 @@ int process_command(struct command_t *command) {
 	}
 
 	// TODO: your implementation here
-
-
 
 
 
