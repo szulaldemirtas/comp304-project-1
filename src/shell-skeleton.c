@@ -445,7 +445,9 @@ int process_command(struct command_t *command) {
 
 		}
 
-		if (command->next) {
+	// TODO: your implementation here
+	//implemented piping here. 
+	if (command->next) {
 			int pipefd[2];
 			if (pipe(pipefd) == -1) {
 				perror("pipe");
@@ -483,8 +485,6 @@ int process_command(struct command_t *command) {
 		wait(0); // wait for child process to finish
 		return SUCCESS;
 	}
-
-	// TODO: your implementation here
 
 
 
