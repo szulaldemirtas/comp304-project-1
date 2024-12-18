@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <termios.h> // termios, TCSANOW, ECHO, ICANON
 #include <unistd.h>
+#include <fcntl.h>
 const char *sysname = "dash";
 
 enum return_codes {
@@ -416,55 +417,40 @@ int process_command(struct command_t *command) {
 		// TODO: do your own exec with path resolving using execv()
 		// do so by replacing the execvp call below
 		
-		// I/O Redirection: <, >, >>
-		// Checking if commmand redirects
-
-		if (command -> redirects[0]) {
-			FILE *input_file = fopen(command -> redirects[0], "r");
+		
+		if (command->redirects[0]) { 
+			// Input redirection: <
+			FILE *input_file = fopen(command->redirects[0], "r");
 			if (!input_file) {
-				perror("Error: Input file is not opened");
-	            exit(EXIT_FAILURE);
+				perror("Error: Input file does not exist");
+				exit(EXIT_FAILURE);
 			}
-
-			if (dup2(fileno(input_file), STDIN_FILENO) < 0) {
-				perror("Error: Redirection failed");
-				fclose(input_file);
-	            exit(EXIT_FAILURE);
-			}
-			
+			dup2(fileno(input_file), STDIN_FILENO);
 			fclose(input_file);
 		}
 
-		if (command -> redirects[1]) {
-			FILE *output_file = fopen(command -> redirects[1], "w");
+		if (command->redirects[1]) { 
+			// Output redirection: >
+			FILE *output_file = fopen(command->redirects[0], "w");
+			
 			if (!output_file) {
-				perror("Error: Output file is not opened");
-           		exit(EXIT_FAILURE);
+				perror("Error: Output file could not be opened");
+				exit(EXIT_FAILURE);
 			}
-
-			if (dup2(fileno(output_file), STDOUT_FILENO) < 0) {
-				perror("Error: Redirection failed");
-	            exit(EXIT_FAILURE);
-			}
-			
+			dup2(fileno(output_file), STDOUT_FILENO);
 			fclose(output_file);
-			
 		}
 
-		if (command -> redirects[2]) {
-			FILE *append_file = fopen(command -> redirects[2], "a");
+		if (command->redirects[2]) { 
+			// Append redirection: >>
+			FILE *append_file = fopen(command->redirects[2], "a");
 			if (!append_file) {
-				perror("Error: Append file is not opened");
-           		exit(EXIT_FAILURE);
+				perror("Error: Append file could not be opened");
+				exit(EXIT_FAILURE);
 			}
-
-			if (dup2(fileno(append_file), STDOUT_FILENO) < 0) {
-				perror("Error: Redirection failed");
-           	    exit(EXIT_FAILURE);
-			}
-
-			fclose(append_file);			
-		}
+			dup2(fileno(append_file), STDOUT_FILENO);
+			fclose(append_file);
+		}	
 
 		int path_length = 1024;
 		char *path = getenv("PATH");
@@ -477,7 +463,6 @@ int process_command(struct command_t *command) {
 			char *command_name = command->name;
 			snprintf(command_path, sizeof(command_path), "%s/%s", token, command_name);
             execv(command_path, command->args);
-
             token = strtok(NULL, ":");
 		}
 
@@ -490,16 +475,15 @@ int process_command(struct command_t *command) {
 		if (command -> background == false) {
 			wait(NULL);
 		}
-		else {
+		else {}
 
-		}
-		wait(0); // wait for child process to finish
 		return SUCCESS;
 	}
 
 	// TODO: your implementation here
 
-
+	perror("execvp");
+	exit(EXIT_FAILURE);
 
 	printf("-%s: %s: command not found\n", sysname, command->name);
 	return UNKNOWN;
