@@ -296,7 +296,7 @@ int prompt(struct command_t *command) {
 		if (c == 9) {
 			buf[index++] = '?'; // autocomplete
 			autocomplete(buf, &index);
-			break;
+			continue;
 		}
 
 		// handle backspace
@@ -550,29 +550,34 @@ void autocomplete(char *buf, size_t *index) {
 
         if (count == 1) {
 			buf[len] = '\0';
-            size_t len = strlen(uncompleted_command);
-            printf("%s", matches[0] + len);
-            strcat(buf, matches[0] + len); 
-            *index = strlen(buf);       
+            size_t u_len = strlen(uncompleted_command);
+			strcat(buf, matches[0] + u_len);
+     	    *index = strlen(buf);
+
+            printf("%s", matches[0] + u_len);
             free(matches[0]);
-			return;
         } 
 		
 		else if (count > 1) {
 			
 			printf("\n");
 			buf[0] = '\0'; 
-            *index = 0; 
+            *index = 0;
+			
             for (int i = 0; i < count; i++) {
                 printf("%s\n", matches[i]);
                 free(matches[i]);
-				return;
-			}
-        } 
+			}	
+		} 
 		
 		else {
-            printf("No matches found");
-        }
+            printf("\nNo matches found");
+
+			buf[0] = '\0';   
+    		*index = 0;
+
+			printf("%s@%s:%s %s$ %s %s", getenv("USER"), "hostname", getcwd(NULL, 0), sysname, buf, uncompleted_command);
+		}
     } 
 	else {
         DIR *dir = opendir(".");
