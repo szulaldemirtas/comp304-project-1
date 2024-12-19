@@ -426,10 +426,10 @@ int process_command(struct command_t *command) {
 			// Input redirection: <
 			char *input_file = command->redirects[0];
 
-			while (*input_file != '\0' && isspace(*input_file)) {
-				input_file++;
+			// If there is space, the file is included in command argumetns
+			if (!input_file || *input_file == '\0') {
+		        input_file = command->args[command->arg_count - 2];
 			}
-
 
 			FILE *input = fopen(input_file, "r");
 			if (!input) {
@@ -444,10 +444,6 @@ int process_command(struct command_t *command) {
 			// Output redirection: >
 			char *output_file = command->redirects[1];
 
-			while (*output_file == ' ' || *output_file == '\t') {
-				output_file++;
-			}
-
 			FILE *output = fopen(output_file, "w");
 			if (!output) {
 				perror("Error: Output file could not be opened");
@@ -460,10 +456,6 @@ int process_command(struct command_t *command) {
 		if (command->redirects[2]) { 
 			// Append redirection: >>
 			char *append_file = command->redirects[2];
-
-			if (*append_file == ' ' || *append_file == '\t') {
-				append_file = strtok(NULL, " \t"); 
-			}
 
 			FILE *append = fopen(append_file, "a");
 			if (!append) {
