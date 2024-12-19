@@ -296,7 +296,7 @@ int prompt(struct command_t *command) {
 		if (c == 9) {
 			buf[index++] = '?'; // autocomplete
 			autocomplete(buf, &index);
-			break;
+			continue;
 		}
 
 		// handle backspace
@@ -357,6 +357,51 @@ int prompt(struct command_t *command) {
 	return SUCCESS;
 }
 
+int hex_dump(const char *file_path, int group_size) {
+    if (group_size != 1 && group_size != 2 && group_size != 4 && group_size != 8 && group_size != 16) {
+        printf("Invalid group size. Supported sizes are: 1, 2, 4, 8, 16.\n");
+        return UNKNOWN;
+    }
+
+    FILE *file = fopen(file_path, "rb");
+    if (!file) {
+        perror("Error opening file");
+        return UNKNOWN;
+    }
+
+    unsigned char buffer[16];
+    size_t bytes_read;
+    size_t offset = 0;
+
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        printf("%08lx: ", offset);
+
+        for (size_t i = 0; i < 16; i += group_size) {
+            if (i < bytes_read) {
+                for (size_t j = 0; j < group_size && i + j < bytes_read; ++j) {
+                    printf("%02x", buffer[i + j]);
+                }
+            } else {
+                for (size_t j = 0; j < group_size; ++j) {
+                    printf("  ");
+                }
+            }
+            printf(" ");
+        }
+
+        printf(" ");
+        for (size_t i = 0; i < bytes_read; ++i) {
+            printf("%c", isprint(buffer[i]) ? buffer[i] : '.');
+        }
+
+        printf("\n");
+        offset += bytes_read;
+    }
+
+    fclose(file);
+    return SUCCESS;
+}
+
 int process_command(struct command_t *command);
 
 int main(void) {
@@ -385,6 +430,8 @@ int main(void) {
 }
 
 int process_command(struct command_t *command) {
+
+
 	int r;
 
 	if (strcmp(command->name, "") == 0) {
@@ -394,6 +441,22 @@ int process_command(struct command_t *command) {
 	if (strcmp(command->name, "exit") == 0) {
 		return EXIT;
 	}
+
+	if (strcmp(command->name, "kuhex") == 0) {
+        if (command->arg_count < 2) {
+            printf("Usage: kuhex <file> [-g <group_size>]\n");
+            return UNKNOWN;
+        }
+
+        const char *file_path = command->args[1];
+        int group_size = 1;
+
+        if (command->arg_count == 4 && strcmp(command->args[2], "-g") == 0) {
+            group_size = atoi(command->args[3]);
+        }
+
+        return hex_dump(file_path, group_size);
+    }
 
 	if (strcmp(command->name, "cd") == 0) {
 		if (command->arg_count > 0) {
@@ -533,12 +596,7 @@ int process_command(struct command_t *command) {
 
 		wait(0); // wait for child process to finish
 		return SUCCESS;
-	}
 
-
-
-
-	}
 
 	// TODO: your implementation here
 
@@ -588,29 +646,34 @@ void autocomplete(char *buf, size_t *index) {
 
         if (count == 1) {
 			buf[len] = '\0';
-            size_t len = strlen(uncompleted_command);
-            printf("%s", matches[0] + len);
-            strcat(buf, matches[0] + len); 
-            *index = strlen(buf);       
+            size_t u_len = strlen(uncompleted_command);
+			strcat(buf, matches[0] + u_len);
+     	    *index = strlen(buf);
+
+            printf("%s", matches[0] + u_len);
             free(matches[0]);
-			return;
         } 
 		
 		else if (count > 1) {
 			
 			printf("\n");
 			buf[0] = '\0'; 
-            *index = 0; 
+            *index = 0;
+			
             for (int i = 0; i < count; i++) {
                 printf("%s\n", matches[i]);
                 free(matches[i]);
-				return;
-			}
-        } 
+			}	
+		} 
 		
 		else {
-            printf("No matches found");
-        }
+            printf("\nNo matches found\n");
+
+			buf[0] = '\0';   
+    		*index = 0;
+
+			printf("%s@%s:%s %s$ %s", getenv("USER"), "hostname", getcwd(NULL, 0), sysname, buf);
+		}
     } 
 	else {
         DIR *dir = opendir(".");
