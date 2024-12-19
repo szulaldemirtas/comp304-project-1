@@ -571,12 +571,12 @@ void autocomplete(char *buf, size_t *index) {
 		} 
 		
 		else {
-            printf("\nNo matches found");
+            printf("\nNo matches found\n");
 
 			buf[0] = '\0';   
     		*index = 0;
 
-			printf("%s@%s:%s %s$ %s %s", getenv("USER"), "hostname", getcwd(NULL, 0), sysname, buf, uncompleted_command);
+			printf("%s@%s:%s %s$ %s", getenv("USER"), "hostname", getcwd(NULL, 0), sysname, buf);
 		}
     } 
 	else {
