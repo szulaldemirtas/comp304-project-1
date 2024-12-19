@@ -7,7 +7,9 @@
 #include <termios.h> // termios, TCSANOW, ECHO, ICANON
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
 const char *sysname = "dash";
+
 
 enum return_codes {
 	SUCCESS = 0,
@@ -416,7 +418,95 @@ int process_command(struct command_t *command) {
 
 		// TODO: do your own exec with path resolving using execv()
 		// do so by replacing the execvp call below
+
+		int path_length = 1024;
+		char *path = getenv("PATH");
+	    char *path_copy = strdup(path);
+		char *token = strtok(path_copy, ":");
+		char command_path[path_length];
+
+		if (command->auto_complete) {
+			
+   			char uncompleted_command[512];
+            char *question_mark = strchr(command->name, '?');
+   			strncpy(uncompleted_command, command->name, strchr(command->name, '?') - command->name);
+			char *matches[512];
+			int count = 0;
+
+			if (question_mark) {
+				while (token != NULL) {
+	
+					DIR *dir = opendir(token);
+					if (dir) {
+						struct dirent *directory;
+						while ((directory = readdir(dir)) != NULL) {
 		
+
+							if (strcmp(directory->d_name, ".") == 0 || strcmp(directory->d_name, "..") == 0) {
+							continue;
+							}	
+
+							if (strncmp(directory->d_name, uncompleted_command, strlen(uncompleted_command)) == 0) {
+
+									matches[count] = strdup(directory->d_name);
+									count++;
+							}
+						}
+
+						closedir(dir);	
+					}
+
+					token = strtok(NULL, ":");
+				}
+
+				if (count == 1) {
+					strcpy(command->name, matches[0]);
+
+					int len = strlen(uncompleted_command);
+					printf("%s", matches[0] + len);
+
+					strcpy(command->name, matches[0]);
+					
+					free(matches[0]);
+					free(path_copy);
+					
+					return SUCCESS;
+					}
+
+				else if (count > 1) {
+					for (int i = 0; i < count; i++) {
+						printf(" %s\n", matches[i]);
+						free(matches[i]);
+					}
+					free(path_copy);
+					exit(0);
+				} 
+				
+				else {
+					printf("No matches found");
+					free(path_copy);
+					exit(0);
+				}
+				
+			}
+
+			else {
+				DIR *dir = opendir(".");
+				if (dir) {
+					struct dirent *directory;
+					while ((directory = readdir(dir)) != NULL) {
+						if (strcmp(directory->d_name, ".") != 0 && strcmp(directory->d_name, "..") != 0) {
+							printf(" %s\n", directory->d_name);
+						}
+					}
+					closedir(dir);
+				} 
+
+				free(path_copy);
+				exit(0);	
+			}
+		}
+			
 		
 		if (command->redirects[0]) { 
 			// Input redirection: <
@@ -452,12 +542,6 @@ int process_command(struct command_t *command) {
 			fclose(append_file);
 		}	
 
-		int path_length = 1024;
-		char *path = getenv("PATH");
-	    char *path_copy = strdup(path);
-		char *token = strtok(path_copy, ":");
-
-		char command_path[path_length];
 		while (token != NULL) {
 			strcpy(command_path, token);
 			char *command_name = command->name;
