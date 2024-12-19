@@ -357,40 +357,49 @@ int prompt(struct command_t *command) {
 	return SUCCESS;
 }
 
-int hex_dump(const char *file_path, int group_size) {
-    if (group_size != 1 && group_size != 2 && group_size != 4 && group_size != 8 && group_size != 16) {
-        printf("Invalid group size. Supported sizes are: 1, 2, 4, 8, 16.\n");
-        return UNKNOWN;
+int hex_dump(const char *filename, int group_size) {
+    // Check if the group_size is valid
+    if (group_size != 1 && group_size != 2 && group_size != 4 &&
+        group_size != 8 && group_size != 16) {
+        fprintf(stderr, "Error: Invalid group size. Supported sizes: 1, 2, 4, 8, 16.\n");
+        return -1;
     }
 
-    FILE *file = fopen(file_path, "rb");
+    FILE *file = fopen(filename, "rb");
     if (!file) {
-        perror("Error opening file");
-        return UNKNOWN;
+        perror("Could not open the file.");
+        return -1;
     }
 
     unsigned char buffer[16];
     size_t bytes_read;
-    size_t offset = 0;
+    unsigned int offset = 0;
 
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-        printf("%08lx: ", offset);
+        printf("%08x: ", offset);
 
-        for (size_t i = 0; i < 16; i += group_size) {
-            if (i < bytes_read) {
-                for (size_t j = 0; j < group_size && i + j < bytes_read; ++j) {
-                    printf("%02x", buffer[i + j]);
-                }
-            } else {
-                for (size_t j = 0; j < group_size; ++j) {
-                    printf("  ");
-                }
+        // Print hex bytes in groups
+        for (size_t i = 0; i < bytes_read; i++) {
+            printf("%02x", buffer[i]); // Print hex without spaces inside groups
+
+            // Add a space after each group, except for the last group
+            if ((i + 1) % group_size == 0 && (i + 1) < bytes_read) {
+                printf(" ");
             }
-            printf(" ");
         }
 
-        printf(" ");
-        for (size_t i = 0; i < bytes_read; ++i) {
+        // Pad if fewer bytes are read than the buffer size
+        for (size_t i = bytes_read; i < sizeof(buffer); i++) {
+            printf("  "); // Two spaces for missing bytes
+            if ((i + 1) % group_size == 0 && (i + 1) < sizeof(buffer)) {
+                printf(" ");
+            }
+        }
+
+        printf("  "); // Space between hex and ASCII
+
+        // Print ASCII representation
+        for (size_t i = 0; i < bytes_read; i++) {
             printf("%c", isprint(buffer[i]) ? buffer[i] : '.');
         }
 
@@ -399,8 +408,12 @@ int hex_dump(const char *file_path, int group_size) {
     }
 
     fclose(file);
-    return SUCCESS;
+    return 0;
 }
+
+
+
+
 
 int process_command(struct command_t *command);
 
@@ -442,21 +455,35 @@ int process_command(struct command_t *command) {
 		return EXIT;
 	}
 
-	if (strcmp(command->name, "kuhex") == 0) {
-        if (command->arg_count < 2) {
-            printf("Usage: kuhex <file> [-g <group_size>]\n");
+if (strcmp(command->name, "kuhex") == 0) {
+    if (command->arg_count < 2) {
+        printf("Usage: kuhex <file> [-g <group_size>]\n");
+        return UNKNOWN;
+    }
+
+    const char *file_path = command->args[1];
+    int group_size = 1; // Default group size
+
+    if (command->arg_count >= 4 && strcmp(command->args[2], "-g") == 0) {
+        group_size = atoi(command->args[3]);
+
+        // Validate group size
+        if (group_size != 1 && group_size != 2 && group_size != 4 &&
+            group_size != 8 && group_size != 16) {
+            printf("Error: Invalid group size. Supported sizes: 1, 2, 4, 8, 16.\n");
             return UNKNOWN;
         }
-
-        const char *file_path = command->args[1];
-        int group_size = 1;
-
-        if (command->arg_count == 4 && strcmp(command->args[2], "-g") == 0) {
-            group_size = atoi(command->args[3]);
-        }
-
-        return hex_dump(file_path, group_size);
     }
+
+    // Call hex_dump and propagate its return value
+    int result = hex_dump(file_path, group_size);
+    if (result < 0) {
+        printf("Error: Failed to execute kuhex for file '%s'.\n", file_path);
+        return UNKNOWN;
+    }
+
+    return SUCCESS;
+}
 
 	if (strcmp(command->name, "cd") == 0) {
 		if (command->arg_count > 0) {
