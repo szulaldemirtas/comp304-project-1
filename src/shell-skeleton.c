@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <ctype.h>
 const char *sysname = "dash";
 
 
@@ -423,38 +424,55 @@ int process_command(struct command_t *command) {
 
 		if (command->redirects[0]) { 
 			// Input redirection: <
-			FILE *input_file = fopen(command->redirects[0], "r");
-			if (!input_file) {
+			char *input_file = command->redirects[0];
+
+			while (*input_file != '\0' && isspace(*input_file)) {
+				input_file++;
+			}
+
+
+			FILE *input = fopen(input_file, "r");
+			if (!input) {
 				perror("Error: Input file does not exist");
 				exit(EXIT_FAILURE);
 			}
-			dup2(fileno(input_file), STDIN_FILENO);
-			fclose(input_file);
+			dup2(fileno(input), STDIN_FILENO);
+			fclose(input);
 		}
 
 		if (command->redirects[1]) { 
 			// Output redirection: >
-			FILE *output_file = fopen(command->redirects[0], "w");
-			
-			if (!output_file) {
+			char *output_file = command->redirects[1];
+
+			while (*output_file == ' ' || *output_file == '\t') {
+				output_file++;
+			}
+
+			FILE *output = fopen(output_file, "w");
+			if (!output) {
 				perror("Error: Output file could not be opened");
 				exit(EXIT_FAILURE);
 			}
-			dup2(fileno(output_file), STDOUT_FILENO);
-			fclose(output_file);
+			dup2(fileno(output), STDOUT_FILENO);
+			fclose(output);
 		}
 
 		if (command->redirects[2]) { 
 			// Append redirection: >>
-			FILE *append_file = fopen(command->redirects[2], "a");
-			if (!append_file) {
+			char *append_file = command->redirects[2];
+
+			if (*append_file == ' ' || *append_file == '\t') {
+				append_file = strtok(NULL, " \t"); 
+			}
+
+			FILE *append = fopen(append_file, "a");
+			if (!append) {
 				perror("Error: Append file could not be opened");
 				exit(EXIT_FAILURE);
 			}
-			dup2(fileno(append_file), STDOUT_FILENO);
-			fclose(append_file);
-		}	
-
+			dup2(fileno(append), STDOUT_FILENO);
+			fclose(append);
+		}
 
 		int path_length = 1024;
 		char *path = getenv("PATH");
@@ -473,7 +491,8 @@ int process_command(struct command_t *command) {
 		printf("%s not found", command -> name);
 		free(path_copy);		
 		exit(0);
-	} else {
+	} 
+	else {
 		// TODO: implement background processes here
 		// Parent process
 		if (command -> background == false) {
