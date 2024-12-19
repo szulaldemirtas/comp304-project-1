@@ -6,7 +6,11 @@
 #include <sys/wait.h>
 #include <termios.h> // termios, TCSANOW, ECHO, ICANON
 #include <unistd.h>
+#include <fcntl.h>
+#include <dirent.h>
+#include <ctype.h>
 const char *sysname = "dash";
+
 
 enum return_codes {
 	SUCCESS = 0,
@@ -253,6 +257,7 @@ void prompt_backspace(void) {
 	putchar(8); // go back 1 again
 }
 
+void autocomplete(char *buf, size_t *index);
 /**
  * Prompt a command from the user
  * @param  buf      [description]
@@ -290,6 +295,7 @@ int prompt(struct command_t *command) {
 		// handle tab
 		if (c == 9) {
 			buf[index++] = '?'; // autocomplete
+			autocomplete(buf, &index);
 			break;
 		}
 
@@ -402,6 +408,7 @@ int process_command(struct command_t *command) {
 	}
 
 	pid_t pid = fork();
+
 	// child
 	if (pid == 0) {
 		/// This shows how to do exec with environ (but is not available on MacOs)
@@ -414,34 +421,76 @@ int process_command(struct command_t *command) {
 
 		// TODO: do your own exec with path resolving using execv()
 		// do so by replacing the execvp call below
-		
+
+		if (command->redirects[0]) { 
+			// Input redirection: <
+			char *input_file = command->redirects[0];
+
+			// If there is space, the file is included in command argumetns
+			if (!input_file || *input_file == '\0') {
+		        input_file = command->args[command->arg_count - 2];
+			}
+
+			FILE *input = fopen(input_file, "r");
+			if (!input) {
+				perror("Error: Input file does not exist");
+				exit(EXIT_FAILURE);
+			}
+			dup2(fileno(input), STDIN_FILENO);
+			fclose(input);
+		}
+
+		if (command->redirects[1]) { 
+			// Output redirection: >
+			char *output_file = command->redirects[1];
+
+			FILE *output = fopen(output_file, "w");
+			if (!output) {
+				perror("Error: Output file could not be opened");
+				exit(EXIT_FAILURE);
+			}
+			dup2(fileno(output), STDOUT_FILENO);
+			fclose(output);
+		}
+
+		if (command->redirects[2]) { 
+			// Append redirection: >>
+			char *append_file = command->redirects[2];
+
+			FILE *append = fopen(append_file, "a");
+			if (!append) {
+				perror("Error: Append file could not be opened");
+				exit(EXIT_FAILURE);
+			}
+			dup2(fileno(append), STDOUT_FILENO);
+			fclose(append);
+		}
+
 		int path_length = 1024;
-
 		char *path = getenv("PATH");
-	    char *path_copy = strdup(path);
+		char *path_copy = strdup(path);
 		char *token = strtok(path_copy, ":");
-
 		char command_path[path_length];
+
 		while (token != NULL) {
 			strcpy(command_path, token);
 			char *command_name = command->name;
-			
 			snprintf(command_path, sizeof(command_path), "%s/%s", token, command_name);
             execv(command_path, command->args);
- 
             token = strtok(NULL, ":");
 		}
 
 		printf("%s not found", command -> name);
 		free(path_copy);		
 		exit(0);
-	} else {
+	} 
+	else {
 		// TODO: implement background processes here
 		// Parent process
 		if (command -> background == false) {
 			wait(NULL);
 		}
-		else {
+		else {}
 
 		}
 
@@ -489,7 +538,96 @@ int process_command(struct command_t *command) {
 
 
 
+	}
+
+	// TODO: your implementation here
+
+	perror("execvp");
+	exit(EXIT_FAILURE);
+
 
 	printf("-%s: %s: command not found\n", sysname, command->name);
 	return UNKNOWN;
+}
+
+void autocomplete(char *buf, size_t *index) { 
+    char *path = getenv("PATH");
+    if (!path) return;    
+	char *path_copy = strdup(path);
+    char *token = strtok(path_copy, ":");
+
+    char uncompleted_command[512];
+    char *question_mark = strchr(buf, '?');
+  
+    char *matches[512];
+    int count = 0;
+
+    if (question_mark) {
+        size_t len = question_mark - buf; 
+        strncpy(uncompleted_command, buf, len);
+        uncompleted_command[len] = '\0';
+
+        while (token != NULL) {
+            DIR *dir = opendir(token);
+            if (dir) {
+                struct dirent *directory;
+                while ((directory = readdir(dir)) != NULL) {
+                    if (strcmp(directory->d_name, ".") == 0 || strcmp(directory->d_name, "..") == 0) {
+                        continue;
+                    }
+                    if (strncmp(directory->d_name, uncompleted_command, strlen(uncompleted_command)) == 0) {
+						
+                        matches[count] = strdup(directory->d_name);
+                        count++;
+                    }
+                }
+                closedir(dir);
+            }
+            token = strtok(NULL, ":");
+        }
+
+        if (count == 1) {
+			buf[len] = '\0';
+            size_t len = strlen(uncompleted_command);
+            printf("%s", matches[0] + len);
+            strcat(buf, matches[0] + len); 
+            *index = strlen(buf);       
+            free(matches[0]);
+			return;
+        } 
+		
+		else if (count > 1) {
+			
+			printf("\n");
+			buf[0] = '\0'; 
+            *index = 0; 
+            for (int i = 0; i < count; i++) {
+                printf("%s\n", matches[i]);
+                free(matches[i]);
+				return;
+			}
+        } 
+		
+		else {
+            printf("No matches found");
+        }
+    } 
+	else {
+        DIR *dir = opendir(".");
+        
+		if (dir) {
+            struct dirent *directory;
+            while ((directory = readdir(dir)) != NULL) {
+                if (strcmp(directory->d_name, ".") != 0 && strcmp(directory->d_name, "..") != 0) {
+                    printf(" %s\n", directory->d_name);
+                }
+            }
+            closedir(dir);
+    	}
+        
+        buf[0] = '\0';
+        *index = 0;
+    }
+
+    free(path_copy);
 }
